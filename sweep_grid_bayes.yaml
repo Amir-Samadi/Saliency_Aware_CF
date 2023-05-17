@@ -1,0 +1,50 @@
+entity: amirsamadi
+project: saliency_guided_CF
+program: main.py
+method: bayes
+metric:
+  name: totall_metric
+  goal: minimize
+parameters:
+  lambda_cls:
+    min: 1
+    max: 3
+  lambda_gp: 
+    min: 5
+    max: 10
+  lambda_rec_x: 
+    min: 4
+    max: 10
+  lambda_rec_sal: 
+    min: 4
+    max: 10
+  g_loss_cls_of_d:
+    values: ["true", "false"]
+  g_loss_sal_rec_method:
+    values: ["mean", "bce"]
+  saliency_method:
+    values: ["GradCAM"]
+  
+
+    # parser.add_argument('--lambda_cls', type=float, default=1, help='weight for domain classification loss')
+    # parser.add_argument('--lambda_rec_x', type=float, default=10, help='weight for reconstruction loss of image')
+    # parser.add_argument('--lambda_rec_sal', type=float, default=10, help='weight for reconstruction loss of saliency')
+    # parser.add_argument('--lambda_gp', type=float, default=10, help='weight for gradient penalty')
+    # parser.add_argument('--g_loss_cls_of_d', type=bool, default=True, help='generator sees class prediction of D or decision model, true for D')
+    # parser.add_argument('--g_loss_sal_rec_method', type=str, default='mean', choices=['mean', 'bce'], help='loss between reconstructed saliency and real one')
+    # parser.add_argument('--saliency_method', type=str, default='GradCAM', help=['AblationCAM', 'GradCAM', 'HiResCAM'])
+
+    # name = parser.parse_args()
+    
+    # my_config = read_yaml('configs/'+name.ymlName)
+    
+    # my_config.lambda_cls = name.lambda_cls
+    # my_config.lambda_rec_x = name.lambda_rec_x
+    # my_config.lambda_rec_sal = name.lambda_rec_sal
+    # my_config.lambda_gp = name.lambda_gp
+    # my_config.g_loss_cls_of_d = name.g_loss_cls_of_d
+    # my_config.g_loss_sal_rec_method = name.g_loss_sal_rec_method
+    # my_config.saliency_method = name.saliency_method
+
+
+    # main(my_config)
