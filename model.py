@@ -27,6 +27,8 @@ class Generator(nn.Module):
         self.CF_method = CF_method
         self.c_dim = c_dim 
         layers = []
+        if (self.CF_method in ["starGAN", "CF_starGAN"]):
+            layers.append(nn.Conv2d(3+c_dim, conv_dim, kernel_size=7, stride=1, padding=3, bias=False))
         if (self.CF_method in ["sailencyGAN", "sailencyGAN_v2"]):
             layers.append(nn.Conv2d(3+1+c_dim, conv_dim, kernel_size=7, stride=1, padding=3, bias=False))
         elif (self.CF_method == "sailencyGAN_v3"):
@@ -61,7 +63,7 @@ class Generator(nn.Module):
         elif (self.CF_method in ["attGAN","CF_attGAN"]):
             layers.append(nn.Conv2d(curr_dim, 3+1, kernel_size=7, stride=1, padding=3, bias=False))
             self.main = nn.Sequential(*layers)   
-        elif (self.CF_method == "starGAN"):
+        elif (self.CF_method in ["starGAN", "CF_starGAN"]):
             layers.append(nn.Conv2d(curr_dim, 3, kernel_size=7, stride=1, padding=3, bias=False))
             layers.append(nn.Tanh())
             self.main = nn.Sequential(*layers)
@@ -106,7 +108,7 @@ class Generator(nn.Module):
             attention_mask = attention_mask.repeat(1, 3, 1, 1)
             result = content_mask * attention_mask + input_image * (1 - attention_mask)
             return result, attention_mask, content_mask
-        elif (self.CF_method == "starGAN"):
+        elif (self.CF_method in ["starGAN", "CF_starGAN"]):
             c = c.view(c.size(0), c.size(1), 1, 1)
             c = c.repeat(1, 1, x.size(2), x.size(3))
             x = torch.cat([x, c], dim=1)
@@ -160,9 +162,11 @@ class Discriminator(nn.Module):
         self.main = nn.Sequential(*layers)
         self.conv1 = nn.Conv2d(curr_dim, 1, kernel_size=3, stride=1, padding=1, bias=False)
         self.conv2 = nn.Conv2d(curr_dim, c_dim, kernel_size=kernel_size, bias=False)
+        # self.conv2 = nn.Conv1d(curr_dim, c_dim, kernel_size=kernel_size, bias=False)
         
     def forward(self, x):
         h = self.main(x)
         out_src = self.conv1(h)
         out_cls = self.conv2(h)
-        return out_src, out_cls.view(out_cls.size(0), out_cls.size(1))
+        # return out_src, out_cls.view(out_cls.size(0), out_cls.size(1))
+        return out_src, out_cls.mean(dim=(2,3))

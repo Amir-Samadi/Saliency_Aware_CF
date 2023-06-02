@@ -35,7 +35,7 @@ def get_memory_free_MiB():
 class Solver(object):
     """Solver for training and testing StarGAN."""
 
-    def __init__(self, celeba_loader, rafd_loader, bdd_loader, MNIST_loader, config, device):
+    def __init__(self, celeba_loader, rafd_loader, bdd_loader, bdd100k_loader, MNIST_loader, config, device):
         """Initialize configurations."""
 
         # wandb
@@ -57,6 +57,7 @@ class Solver(object):
         self.celeba_loader = celeba_loader
         self.rafd_loader = rafd_loader
         self.bdd_loader = bdd_loader
+        self.bdd100k_loader = bdd100k_loader
         self.MNIST_loader = MNIST_loader
 
         # Model configurations.
@@ -68,6 +69,7 @@ class Solver(object):
         self.g_repeat_num = config.g_repeat_num
         self.d_repeat_num = config.d_repeat_num
         self.lambda_cls = config.lambda_cls
+        self.lambda_sal_fuse = config.lambda_sal_fuse
         self.lambda_rec_x = config.lambda_rec_x
         self.lambda_rec_sal = config.lambda_rec_sal
         self.lambda_gp = config.lambda_gp
@@ -110,7 +112,8 @@ class Solver(object):
         
         #counterfactual
         self.CF_method = config.CF_method 
-        if (self.CF_method in ["sailencyGAN", "sailencyGAN_v2", "sailencyGAN_v3", "CF_attGAN"]):
+        # if (self.CF_method in ["sailencyGAN", "sailencyGAN_v2", "sailencyGAN_v3", "CF_attGAN", "attGAN", "starGAN", "CF_starGAN"]):
+        if (self.CF_method in ["sailencyGAN", "sailencyGAN_v2", "sailencyGAN_v3", "CF_attGAN", "CF_starGAN"]):
 
             if config.dataset in ['CelebA']:
                 self.decision_model = DecisionModel(opt=config, data_loader_train=self.celeba_loader, 
@@ -118,7 +121,7 @@ class Solver(object):
             elif config.dataset in ['RaFD']:
                 self.decision_model = DecisionModel(opt=config, data_loader_train=self.rafd_loader,
                                                 data_loader_val=self.rafd_loader, device=self.device)
-            elif config.dataset in ['BDD']:
+            elif config.dataset in ['BDD', 'BDD100k']:
                 self.decision_model = DecisionModel(opt=config, data_loader_train=self.bdd_loader,
                                                 data_loader_val=self.bdd_loader, device=self.device)
             elif config.dataset in ['MNIST']:
@@ -133,10 +136,10 @@ class Solver(object):
             elif (config.decision_model_train == 'train'):
                 self.decision_model.train()
             elif (config.decision_model_train == 'test'):
-                self.decision_model.model.load_state_dict(torch.load(os.path.join(config.decision_model_LOG_DIR, config.decision_model_name, 'checkpoint.tar'))['model_state_dict'])
+                self.decision_model.model.load_state_dict(torch.load(os.path.join(config.decision_model_LOG_DIR, config.decision_model_name, 'checkpoint.tar'), map_location=device)['model_state_dict'])
                 self.decision_model.test() 
             else:
-                self.decision_model.model.load_state_dict(torch.load(os.path.join(config.decision_model_LOG_DIR, config.decision_model_name, 'checkpoint.tar'))['model_state_dict'])
+                self.decision_model.model.load_state_dict(torch.load(os.path.join(config.decision_model_LOG_DIR, config.decision_model_name, 'checkpoint.tar'), map_location=device)['model_state_dict'])
 
 
             # self.decision_model.model.eval()
@@ -191,7 +194,7 @@ class Solver(object):
 
     def build_model(self):
         """Create a generator and a discriminator."""
-        if self.dataset in ['CelebA', 'RaFD', 'BDD', 'MNIST']:
+        if self.dataset in ['CelebA', 'RaFD', 'BDD', 'BDD100k', 'MNIST']:
             self.G = Generator(self.g_conv_dim, self.c_dim, self.g_repeat_num, self.CF_method)
             self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num) 
         elif self.dataset in ['Both']:
@@ -300,7 +303,7 @@ class Solver(object):
                     c_trg[:, i] = (c_trg[:, i] == 0)  # Reverse attribute value.
             elif dataset == 'RaFD':
                 c_trg = self.label2onehot(torch.ones(c_org.size(0))*i, c_dim)
-            elif dataset in ['BDD', 'MNIST']:
+            elif dataset in ['BDD', 'BDD100k', 'MNIST']:
                 c_trg = self.label2onehot(torch.ones(c_org.size(0))*i, c_dim)
             c_trg_list.append(c_trg.to(self.device))
         return c_trg_list
@@ -311,7 +314,7 @@ class Solver(object):
             return F.binary_cross_entropy_with_logits(logit, target, size_average=False) / logit.size(0)
         elif dataset == 'RaFD':
             return F.cross_entropy(logit, target)
-        elif dataset in ['BDD', 'MNIST']:
+        elif dataset in ['BDD', 'BDD100k', 'MNIST']:
             return F.binary_cross_entropy_with_logits(logit, target, size_average=False) / logit.size(0)
 
     def train(self):
@@ -321,6 +324,8 @@ class Solver(object):
             data_loader = self.celeba_loader
         elif self.dataset == 'RaFD':
             data_loader = self.rafd_loader
+        elif self.dataset == 'BDD100k':
+            data_loader = self.bdd100k_loader
         elif self.dataset == 'BDD':
             data_loader = self.bdd_loader
         elif self.dataset == 'MNIST':
@@ -331,7 +336,7 @@ class Solver(object):
         data_iter = iter(data_loader)
         x_fixed, c_org = next(data_iter)
         x_fixed = x_fixed.to(self.device)
-        if (self.CF_method in ["sailencyGAN", "sailencyGAN_v2","sailencyGAN_v3", "CF_attGAN"]):  
+        if (self.CF_method in ["sailencyGAN", "sailencyGAN_v2","sailencyGAN_v3", "CF_attGAN", "CF_starGAN"]):  
             c_org = self.decision_model.decisionModel_label_gen(x_fixed, self.dataset)
             c_org_fixed = c_org.to(self.device)
         c_trg_fixed_list = self.create_labels(c_org, self.c_dim, self.dataset, self.selected_attrs)
@@ -374,7 +379,7 @@ class Solver(object):
             # =================================================================================== #
  
             # Fetch real images and labels.
-            if (self.CF_method in ["sailencyGAN", "sailencyGAN_v2", "sailencyGAN_v3", "CF_attGAN"]):
+            if (self.CF_method in ["sailencyGAN", "sailencyGAN_v2", "sailencyGAN_v3", "CF_attGAN", "CF_starGAN"]):
                 try:
                     x_real = next(data_iter)[0]
                     x_real = x_real.to(self.device)
@@ -398,7 +403,7 @@ class Solver(object):
             rand_idx = torch.randperm(label_org.size(0))
             label_trg = label_org[rand_idx]
 
-            if self.dataset in ['CelebA', 'BDD', 'MNIST']:
+            if self.dataset in ['CelebA', 'BDD', 'BDD100k', 'MNIST']:
                 c_org = label_org.clone()
                 c_trg = label_trg.clone()
             elif self.dataset == 'RaFD':
@@ -432,7 +437,7 @@ class Solver(object):
                 x_fake, attention_mask, content_mask, _ = self.G(x_real, c_trg, saliency_real)
             elif (self.CF_method in ["attGAN", "CF_attGAN"]):
                 x_fake, attention_mask, content_mask = self.G(x_real, c_trg, None)
-            elif (self.CF_method=="starGAN"):    
+            elif (self.CF_method in ["starGAN", "CF_starGAN"]):    
                 x_fake = self.G(x_real, c_trg, None)
             elif (self.CF_method=="sailencyGAN_v2"):    
                 x_fake, saliency_fake, content_mask = self.G(x_real, c_trg, saliency_real)
@@ -468,7 +473,7 @@ class Solver(object):
                     x_fake, attention_mask, content_mask, saliency_fake = self.G(x_real, c_trg, saliency_real)
                 elif (self.CF_method in ["attGAN", "CF_attGAN"]):
                     x_fake, attention_mask, content_mask = self.G(x_real, c_trg, None)
-                elif (self.CF_method=="starGAN"):
+                elif (self.CF_method in ["starGAN", "CF_starGAN"]):
                     x_fake = self.G(x_real, c_trg, None)
                 elif (self.CF_method=="sailencyGAN_v2"):    
                     x_fake, saliency_fake, content_mask = self.G(x_real, c_trg, saliency_real)
@@ -485,7 +490,7 @@ class Solver(object):
                     x_reconst, _, _, saliency_reconst = self.G(x_fake, c_org, saliency_fake)
                 elif (self.CF_method in ["attGAN", "CF_attGAN"]):
                     x_reconst, _, _ = self.G(x_fake, c_org, None)
-                elif (self.CF_method=="starGAN"):
+                elif (self.CF_method in ["starGAN", "CF_starGAN"]):
                     x_reconst = self.G(x_fake, c_org, None)
                 elif (self.CF_method=="sailencyGAN_v2"):
                     x_reconst, saliency_reconst, _ = self.G(x_fake, c_org, saliency_fake)
@@ -509,7 +514,7 @@ class Solver(object):
 
 
                     g_loss_rec = self.lambda_rec_x * g_loss_rec_x + self.lambda_rec_sal * g_loss_rec_sal
-                    g_loss = g_loss_fake + g_loss_rec + self.lambda_cls * g_loss_cls + 10*loss_sal_fuse
+                    g_loss = g_loss_fake + g_loss_rec + self.lambda_cls * g_loss_cls + self.lambda_sal_fuse*loss_sal_fuse
                 else:
                     g_loss_rec = self.lambda_rec_x * g_loss_rec_x
                     g_loss = g_loss_fake + g_loss_rec + self.lambda_cls * g_loss_cls
@@ -609,7 +614,7 @@ class Solver(object):
                         x_fake_list.append(fake)
                         x_attention_list.append(attention)
                         x_content_list.append(content)
-                    elif (self.CF_method=="starGAN"):
+                    elif (self.CF_method in ["starGAN", "CF_starGAN"]):
                         fake = self.G(x_fixed, c_fixed, None)
                         x_fake_list.append(fake)
                     elif (self.CF_method=="sailencyGAN_v2"):
@@ -659,7 +664,7 @@ class Solver(object):
                         save_image(self.denorm(x_concat.data.cpu()), sample_path, nrow=1, padding=0)
                         save_image(self.denorm(attention_concat.data.cpu()), attention_path, nrow=1, padding=0)
                         save_image(self.denorm(content_concat.data.cpu()), content_path, nrow=1, padding=0)
-                    elif (self.CF_method=="starGAN"):
+                    elif (self.CF_method in ["starGAN", "CF_starGAN"]):
                         x_concat = torch.cat(x_fake_list, dim=3)
                         sample_path = os.path.join(self.sample_dir, '{}-images.jpg'.format(i+1))
                         save_image(self.denorm(x_concat.data.cpu()), sample_path, nrow=1, padding=0)
@@ -821,6 +826,8 @@ class Solver(object):
             data_loader = self.rafd_loader
         elif self.dataset == 'BDD':
             data_loader = self.bdd_loader
+        elif self.dataset == 'BDD100k':
+            data_loader = self.bdd100k_loader
         elif self.dataset == 'MNIST':
             data_loader = self.MNIST_loader
             
@@ -880,7 +887,7 @@ class Solver(object):
                     x_fake_list.append(fake)
                     x_attention_list.append(attention)
                     x_content_list.append(content)
-                elif (self.CF_method=="starGAN"):
+                elif (self.CF_method in ["starGAN", "CF_starGAN"]):
                     with torch.no_grad():
                         fake = self.G(x_real, c_trg, None)
                     x_fake_list.append(fake)
@@ -915,10 +922,11 @@ class Solver(object):
                 
                 if "KID" in self.metrics:
                     self.kid.update(x_fake_normal, real=False)
-                    metrics_dict['metric/KID'].append(self.kid.compute()[0].item())
-                    metrics_dict['metric/KID_std'].append(self.kid.compute()[1].item())
+                    kidValue = self.kid.compute()
+                    metrics_dict['metric/KID'].append(kidValue[0].item())
+                    metrics_dict['metric/KID_std'].append(kidValue[1].item())
                     wandb_metrics_dict['metric/KID'] = metrics_dict['metric/KID'][-1]
-                    wandb_metrics_dict['metric/KID_std'] = metrics_dict['metric/KID'][-1]
+                    wandb_metrics_dict['metric/KID_std'] = metrics_dict['metric/KID_std'][-1]
                
                 if "FID" in self.metrics:
                     self.fid.update(x_fake_normal, real=False)
@@ -934,24 +942,27 @@ class Solver(object):
                     inceptionScore = self.inception.compute()
                     metrics_dict['metric/IS'].append(inceptionScore[0].item()) 
                     metrics_dict['metric/IS_std'].append(inceptionScore[1].item()) 
-                    wandb_metrics_dict['metric/IS_std'] = metrics_dict['metric/IS'][-1] 
-                    wandb_metrics_dict['metric/IS'] = metrics_dict['metric/IS_std'][-1] 
+                    wandb_metrics_dict['metric/IS'] = metrics_dict['metric/IS'][-1] 
+                    wandb_metrics_dict['metric/IS_std'] = metrics_dict['metric/IS_std'][-1] 
                 
                 if "sparsity" in self.metrics:
                     #sparsity should see the actual generated image not normalized one
                     metrics_dict['metric/sparsity'].append(self.get_sparcity(x_real, fake))               
-                    wandb_metrics_dict['metric/sparsity'] = metrics_dict['metric/sparsity'][-1]             
+                    # wandb_metrics_dict['metric/sparsity'] = metrics_dict['metric/sparsity'][-1]             
+                    wandb_metrics_dict['metric/sparsity'+str(c_trg[0].nonzero().item())] = metrics_dict['metric/sparsity'][-1]             
                 
                 if "mean_dis" in self.metrics:
                     #sparsity should see the actual generated image not normalized one
                     metrics_dict['metric/mean_dis'].append(self.get_mean_dis(x_real, fake))               
-                    wandb_metrics_dict['metric/mean_dis'] = metrics_dict['metric/mean_dis'][-1]  
+                    # wandb_metrics_dict['metric/mean_dis'] = metrics_dict['metric/mean_dis'][-1]  
+                    wandb_metrics_dict['metric/mean_dis'+str(c_trg[0].nonzero().item())] = metrics_dict['metric/mean_dis'][-1]  
 
                 if "validity" in self.metrics and\
-                         (self.CF_method in ["sailencyGAN", "sailencyGAN_v3", "sailencyGAN_v2", "CF_attGAN"]):
+                         (self.CF_method in ["sailencyGAN", "sailencyGAN_v3", "sailencyGAN_v2", "CF_attGAN", "attGAN", "CF_starGAN", "starGAN"]):
                     #decision_model should see the actual generated image not normalized one
                     metrics_dict['metric/validity'].append(self.get_validity(fake, c_trg))
-                    wandb_metrics_dict['metric/validity'] = metrics_dict['metric/validity'][-1]
+                    # wandb_metrics_dict['metric/validity'] = metrics_dict['metric/validity'][-1]
+                    wandb_metrics_dict['metric/validity'+str(c_trg[0].nonzero().item())] = metrics_dict['metric/validity'][-1]
                     
                 if(self.wandb):
                     wandb.log(wandb_metrics_dict)
@@ -981,7 +992,7 @@ class Solver(object):
                 save_image(self.denorm(attention_concat.data.cpu()), attention_path, nrow=1, padding=0)
                 content_path = os.path.join(self.result_dir, '{}-content.jpg'.format(i + 1))
                 save_image(self.denorm(content_concat.data.cpu()), content_path, nrow=1, padding=0)
-            elif (self.CF_method=="starGAN"):
+            elif (self.CF_method in ["starGAN", "CF_starGAN"]):
                 x_concat = torch.cat(x_fake_list, dim=3)
                 result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
                 save_image(self.denorm(x_concat.data.cpu()), result_path, nrow=1, padding=0)

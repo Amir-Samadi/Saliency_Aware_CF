@@ -78,27 +78,47 @@ def main(config):
     celeba_loader = None
     rafd_loader = None
     bdd_loader = None
+    bdd100k_loader = None
     MNIST_loader = None
 
     if config.dataset in ['CelebA', 'Both']:
         celeba_loader = get_loader(config.celeba_image_dir, config.attr_path, config.selected_attrs,
-                                   config.celeba_crop_size, config.image_size, config.batch_size,
+                                   config.image_size, config.celeba_crop_size, config.batch_size,
                                    'CelebA', config.mode, config.num_workers, None, None)
     if config.dataset in ['RaFD', 'Both']:
         rafd_loader = get_loader(config.rafd_image_dir, None, None,
-                                 config.rafd_crop_size, config.image_size, config.batch_size,
+                                 config.image_size, config.rafd_crop_size, config.batch_size,
                                  'RaFD', config.mode, config.num_workers, None, None)
     if config.dataset in ['BDD']:
-        bdd_loader = get_loader(image_dir=None, attr_path=None, selected_attrs=None,
-                                 crop_size=config.bdd_load_size, image_size=config.image_size, batch_size=config.batch_size,
-                                 dataset='BDD', mode=config.mode, num_workers=config.num_workers,
-                                 image_root=config.bdd_image_root, gt_root_train=config.bdd_gt_root_train)
+        if config.mode=='train':
+            bdd_loader = get_loader(image_dir=None, attr_path=None, selected_attrs=None,
+                                    image_size=config.bdd_load_size, crop_size=config.bdd_load_size, batch_size=config.batch_size,
+                                    dataset='BDD', mode=config.mode, num_workers=config.num_workers,
+                                    image_root=config.bdd_image_root, gt_root_train=config.bdd_gt_root_train)
+        else:
+            bdd_loader = get_loader(image_dir=None, attr_path=None, selected_attrs=None,
+                                    image_size=config.bdd_load_size, crop_size=config.bdd_load_size, batch_size=config.batch_size,
+                                    dataset='BDD', mode=config.mode, num_workers=config.num_workers,
+                                    image_root=config.bdd_image_root, gt_root_train=config.bdd_gt_root_val)
+
+    if config.dataset in ['BDD100k']:
+        if config.mode=='train':
+            bdd100k_loader = get_loader(image_dir=None, attr_path=None, selected_attrs=None,
+                                    image_size=config.bdd_load_size, crop_size=config.bdd_load_size, batch_size=config.batch_size,
+                                    dataset='BDD100k', mode=config.mode, num_workers=config.num_workers,
+                                    image_root=config.bdd100k_image_root_train, gt_root_train=config.bdd100k_gt_root_train)
+        else:
+            bdd100k_loader = get_loader(image_dir=None, attr_path=None, selected_attrs=None,
+                                    image_size=config.bdd_load_size, crop_size=config.bdd_load_size, batch_size=config.batch_size,
+                                    dataset='BDD100k', mode=config.mode, num_workers=config.num_workers,
+                                    image_root=config.bdd100k_image_root_val, gt_root_train=config.bdd100k_gt_root_val)
+
     if config.dataset in ['MNIST']:
         MNIST_loader = get_loader(image_dir=config.MNIST_image_dir, attr_path=None, selected_attrs=None,
-                                 crop_size=config.MNIST_crop_size, image_size=config.image_size, batch_size=config.batch_size,
+                                 image_size=config.image_size, crop_size=config.MNIST_crop_size, batch_size=config.batch_size,
                                  dataset='MNIST', mode=config.mode, num_workers=config.num_workers,
                                  image_root=None, gt_root_train=None)
-    solver = Solver(celeba_loader, rafd_loader, bdd_loader, MNIST_loader, config, device)
+    solver = Solver(celeba_loader, rafd_loader, bdd_loader, bdd100k_loader, MNIST_loader, config, device)
 
         
 ##################for metrics only#######################
@@ -106,20 +126,37 @@ def main(config):
         mode = 'test' if config.mode=='train' else 'train'
         if config.dataset in ['CelebA', 'Both']:
             data_loader = get_loader(config.celeba_image_dir, config.attr_path, config.selected_attrs,
-                                    config.celeba_crop_size, config.image_size, config.batch_size,
+                                    config.image_size, config.celeba_crop_size, config.batch_size,
                                     'CelebA', mode, config.num_workers, None, None)
         if config.dataset in ['RaFD', 'Both']:
             data_loader = get_loader(config.rafd_image_dir, None, None,
-                                    config.rafd_crop_size, config.image_size, config.batch_size,
+                                    config.image_size, config.rafd_crop_size, config.batch_size,
                                     'RaFD', mode, config.num_workers, None, None)
         if config.dataset in ['BDD']:
-            data_loader = get_loader(image_dir=None, attr_path=None, selected_attrs=None,
-                                    crop_size=config.bdd_load_size, image_size=config.image_size, batch_size=config.batch_size,
-                                    dataset='BDD', mode=mode, num_workers=config.num_workers,
-                                    image_root=config.bdd_image_root, gt_root_train=config.bdd_gt_root_train)
+            if mode=='train':
+                data_loader = get_loader(image_dir=None, attr_path=None, selected_attrs=None,
+                                        image_size=config.bdd_load_size, crop_size=config.bdd_load_size,  batch_size=config.batch_size,
+                                        dataset='BDD', mode=config.mode, num_workers=config.num_workers,
+                                        image_root=config.bdd_image_root, gt_root_train=config.bdd_gt_root_train)
+            else:
+                data_loader = get_loader(image_dir=None, attr_path=None, selected_attrs=None,
+                                        image_size=config.bdd_load_size, crop_size=config.bdd_load_size, batch_size=config.batch_size,
+                                        dataset='BDD', mode=config.mode, num_workers=config.num_workers,
+                                        image_root=config.bdd_image_root, gt_root_train=config.bdd_gt_root_val)
+        if config.dataset in ['BDD100k']:
+            if mode=='train':
+                data_loader = get_loader(image_dir=None, attr_path=None, selected_attrs=None,
+                                        image_size=config.bdd_load_size, crop_size=config.bdd_load_size, batch_size=config.batch_size,
+                                        dataset='BDD100k', mode=config.mode, num_workers=config.num_workers,
+                                        image_root=config.bdd100k_image_root_train, gt_root_train=config.bdd100k_gt_root_train)
+            else:
+                data_loader = get_loader(image_dir=None, attr_path=None, selected_attrs=None,
+                                        image_size=config.bdd_load_size, crop_size=config.bdd_load_size, batch_size=config.batch_size,
+                                        dataset='BDD100k', mode=config.mode, num_workers=config.num_workers,
+                                        image_root=config.bdd100k_image_root_val, gt_root_train=config.bdd100k_gt_root_val)
         if config.dataset in ['MNIST']:
             data_loader = get_loader(image_dir=config.MNIST_image_dir, attr_path=None, selected_attrs=None,
-                                    crop_size=config.MNIST_crop_size, image_size=config.image_size, batch_size=config.batch_size,
+                                    image_size=config.image_size, crop_size=config.MNIST_crop_size, batch_size=config.batch_size,
                                     dataset='MNIST', mode=mode, num_workers=config.num_workers,
                                     image_root=None, gt_root_train=None)
 
@@ -136,22 +173,14 @@ def main(config):
                 break
         del data_loader
 ####################################################################
-
-
-
-
-
-
-
-
     # Solver for training and testing StarGAN.
     if config.mode == 'train':
-        if config.dataset in ['CelebA', 'RaFD', 'BDD', 'MNIST']: 
+        if config.dataset in ['CelebA', 'RaFD', 'BDD', 'BDD100k', 'MNIST']: 
             solver.train()
         elif config.dataset in ['Both']:
             solver.train_multi()
     elif config.mode == 'test':
-        if config.dataset in ['CelebA', 'RaFD', 'BDD', 'MNIST']:
+        if config.dataset in ['CelebA', 'RaFD', 'BDD', 'BDD100k', 'MNIST']:
             solver.test()
         elif config.dataset in ['Both']:
             solver.test_multi()
@@ -159,10 +188,12 @@ def main(config):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ymlName', type=str, default='sailencyGAN_v3-BDD100k-GradCAM-config.yml', help='yml config name') # CF_attGAN 'sailencyGAN_v3-MNIST-GradCAM-config.yml'
+    parser.add_argument('--ymlName', type=str, default='CF_starGAN-BDD100k-GradCAM-config.yml', help='yml config name') 
+    # CF_attGAN 'sailencyGAN_v3-MNIST-GradCAM-config.yml'
     parser.add_argument('--lambda_cls', type=float, default=1, help='weight for domain classification loss')
     parser.add_argument('--lambda_rec_x', type=float, default=10, help='weight for reconstruction loss of image')
     parser.add_argument('--lambda_rec_sal', type=float, default=10, help='weight for reconstruction loss of saliency')
+    parser.add_argument('--lambda_sal_fuse', type=float, default=5, help='weight for reconstruction loss of saliency')
     parser.add_argument('--lambda_gp', type=float, default=10, help='weight for gradient penalty')
     parser.add_argument('--g_loss_cls_of_d', type=bool, default=True, help='generator sees class prediction of D or decision model, true for D')
     parser.add_argument('--g_loss_sal_rec_method', type=str, default='mean', choices=['mean', 'bce'], help='loss between reconstructed saliency and real one')
@@ -178,6 +209,7 @@ if __name__ == '__main__':
     my_config.lambda_cls = name.lambda_cls
     my_config.lambda_rec_x = name.lambda_rec_x
     my_config.lambda_rec_sal = name.lambda_rec_sal
+    my_config.lambda_sal_fuse = name.lambda_sal_fuse
     my_config.lambda_gp = name.lambda_gp
     my_config.g_loss_cls_of_d = name.g_loss_cls_of_d
     my_config.g_loss_sal_rec_method = name.g_loss_sal_rec_method

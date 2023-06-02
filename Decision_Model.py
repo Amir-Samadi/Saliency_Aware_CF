@@ -26,12 +26,13 @@ class DecisionModel(object):
         """Initialize configurations."""        
         self.opt = opt
         self.CF_method = opt.CF_method
+        self.decision_model_name = opt.decision_model_name 
         self.dataset = opt.dataset
         self.c_dim = opt.c_dim
         self.saliency_method = opt.saliency_method
         self.batch_size = opt.batch_size
         self.device = device
-        self.model = DecisionDensenetModel(
+        self.model = DecisionDensenetModel(device=self.device,
             num_classes=len(opt.decision_model_attributes_idx), pretrained=True)
         
         if opt.decision_model_train in ['train', 'test']: 
@@ -200,7 +201,7 @@ class DecisionModel(object):
                 lowest_loss = total_mean_loss
                 save_dict = {'epoch': epoch+1, 'optimizer_state_dict': self.optimizer.state_dict(),
                               'loss': total_mean_loss, 'model_state_dict': self.model.state_dict()}
-                torch.save(save_dict, os.path.join(self.decision_model_LOG_DIR, 'checkpoint.tar'))
+                torch.save(save_dict, os.path.join(self.decision_model_LOG_DIR, self.decision_model_name, 'checkpoint.tar'))
                 print("saved new checkpoint")
 
         del self.dataloader_train
@@ -218,8 +219,8 @@ class DecisionModel(object):
         # decision_model = copy(self.model)
         with torch.no_grad():
             outputs = self.model(x)
-        if(datasetName in ['CelebA', 'BDD']):        
-            class_idx = torch.where(outputs > 0.5 , 1.0,0.0)
+        if(datasetName in ['CelebA', 'BDD', 'BDD100k']):        
+            class_idx = torch.where(outputs > 0.5 , 1.0, 0.0)
         elif(datasetName in ['RaFD', 'Both', 'MNIST']):
             probs = F.softmax(outputs).data.squeeze()
             # get the class indices of top k probabilities
@@ -276,8 +277,8 @@ class DecisionModel(object):
         # ax[1,1].imshow(cam(input_tensor=x, targets=[ClassifierOutputTarget(3)])[0])
         # ax[1,2].imshow(cam(input_tensor=x, targets=[ClassifierOutputTarget(4)])[0])
 
-
-        
+        cam.activations_and_grads.model.to(self.device)
+        cam.model.to(self.device)
         grayscale_cam = torch.zeros((x.size(0), self.c_dim, x.size(2), x.size(3)))
         toggle_signs = (org_class - desired_class).to(self.device)
         grayscale_cam[torch.where(toggle_signs == -1)] = torch.ones((x.size(2), x.size(3)))
@@ -312,21 +313,21 @@ class DecisionModel(object):
             # ax[0,2].imshow(grayscale_cam[0,1], vmax=1, vmin=0)
             # ax[0,3].imshow(grayscale_cam[0,2], vmax=1, vmin=0)
             # ax[0,4].imshow(grayscale_cam[0,3], vmax=1, vmin=0)
-            # ax[0,5].imshow(grayscale_cam[0,4], vmax=1, vmin=0)
+            # # ax[0,5].imshow(grayscale_cam[0,4], vmax=1, vmin=0)
 
             # ax[1,0].imshow(x[1].permute(1,2,0).cpu())
             # ax[1,1].imshow(grayscale_cam[1,0], vmax=1, vmin=0)
             # ax[1,2].imshow(grayscale_cam[1,1], vmax=1, vmin=0)
             # ax[1,3].imshow(grayscale_cam[1,2], vmax=1, vmin=0)
             # ax[1,4].imshow(grayscale_cam[1,3], vmax=1, vmin=0)
-            # ax[1,5].imshow(grayscale_cam[1,4], vmax=1, vmin=0)
+            # # ax[1,5].imshow(grayscale_cam[1,4], vmax=1, vmin=0)
 
             # ax[2,0].imshow(x[2].permute(1,2,0).cpu())
             # ax[2,1].imshow(grayscale_cam[2,0], vmax=1, vmin=0)
             # ax[2,2].imshow(grayscale_cam[2,1], vmax=1, vmin=0)
             # ax[2,3].imshow(grayscale_cam[2,2], vmax=1, vmin=0)
             # ax[2,4].imshow(grayscale_cam[2,3], vmax=1, vmin=0)
-            # ax[2,5].imshow(grayscale_cam[2,4], vmax=1, vmin=0)
+            # # ax[2,5].imshow(grayscale_cam[2,4], vmax=1, vmin=0)
 
             return grayscale_cam.detach()
 
